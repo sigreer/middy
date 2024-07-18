@@ -98,6 +98,7 @@ class MidiCommandApp(QMainWindow):
         self.command_map = {}
         self.last_note_on_event = None  # Variable to store the last note_on event
         self.command1 = None  # Initialize the variable to store the command
+        self.expected_note_on_event = None  # Variable to store the expected note_on event
 
         self.midi_message_received.connect(self.handle_midi_message)
 
@@ -137,14 +138,14 @@ class MidiCommandApp(QMainWindow):
             print(f"Started listening for MIDI messages on {selected_port}")  # Debug print
         except Exception as e:
             print(f"Error: {e}")
-    
+
     def stop_listening(self):
         if self.midi_input:
             self.midi_input.close()
             self.midi_input = None
             self.toggle_button.setText("Start Listening")
             self.update_icon("unassigned")
-    
+
     def update_icon(self, state):
         icon_map = {
             "unassigned": "assets/unassigned.svg",
@@ -162,7 +163,21 @@ class MidiCommandApp(QMainWindow):
 
     def midi_callback(self, message):
         print(f"MIDI callback triggered with message: {message}")  # Debug print
-        self.message_queue.put(message)
+        if message.type == 'note_on':
+            note_on_event = f"{message.channel}:{message.note}"
+            if self.expected_note_on_event and note_on_event == self.expected_note_on_event:
+                print(f"received {note_on_event}")  # Print the received event
+            elif not self.expected_note_on_event:
+                self.last_note_on_event = note_on_event
+                self.midi_message_received.emit(f"Received MIDI message: {message}")
+                self.stop_listening()  # Stop listening when a message is received
+                print(f"Stored note_on event: {self.last_note_on_event}")  # Debug print
+                self.toggle_button.setText(self.last_note_on_event)
+                self.update_icon("assigned")
+            else:
+                print(f"Ignored MIDI message: {message}")  # Debug print for ignored messages
+        else:
+            self.message_queue.put(message)
 
     def process_message_queue(self):
         while not self.message_queue.empty():
@@ -184,3 +199,7 @@ class MidiCommandApp(QMainWindow):
         if self.action_selector.currentText() == "Run command":
             self.command1 = self.action_input.text()
             print(f"Command stored: {self.command1}")  # Debug print
+            if self.last_note_on_event:
+                self.expected_note_on_event = self.last_note_on_event
+                print(f"Listening for MIDI event: {self.expected_note_on_event}")  # Debug print
+                self.start_listening()  # Start listening for MIDI input
