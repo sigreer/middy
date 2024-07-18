@@ -1,6 +1,7 @@
 from src.gui import MidiCommandApp
 import sys
-from PyQt5.QtWidgets import QApplication
+print(sys.path)
+from PySide6.QtWidgets import QApplication
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
