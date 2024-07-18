@@ -7,9 +7,13 @@ except ImportError:
     pyudev = None
     print("pyudev is not available. USB port detection will be skipped.")
 
-from PySide6.QtWidgets import QMainWindow, QPushButton, QVBoxLayout, QWidget, QComboBox, QLabel, QHBoxLayout
+from PySide6.QtWidgets import QMainWindow, QPushButton, QVBoxLayout, QWidget, QComboBox, QLabel, QHBoxLayout, QLineEdit
 from PySide6.QtCore import Signal, Slot, Qt, QTimer
-from PySide6.QtSvg import QSvgWidget  # Add this import
+try:
+    from PySide6.QtSvg import QSvgWidget
+except ImportError:
+    QSvgWidget = None
+    print("QSvgWidget is not available. SVG icons will not be displayed.")
 import mido
 import subprocess
 from PySide6.QtGui import QPixmap
@@ -25,37 +29,75 @@ class MidiCommandApp(QMainWindow):
         self.setWindowTitle("MIDI to Command Mapper")
         self.setGeometry(300, 300, 400, 200)
 
-        layout = QVBoxLayout()
+        main_layout = QVBoxLayout()
+
+        # Create a container for the dropdown, button, and icon
+        control_container = QWidget(self)
+        control_layout = QVBoxLayout(control_container)
+        control_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
+        control_layout.setSpacing(2)  # Set spacing to 2px
 
         self.device_selector = QComboBox(self)
         self.device_selector.setFixedWidth(150)  # Set width to 150px
         self.update_device_list()
-        layout.addWidget(self.device_selector)
+        control_layout.addWidget(self.device_selector)
         
         self.toggle_button = QPushButton("Start Listening", self)
         self.toggle_button.setFixedWidth(150)  # Set width to 150px
         self.toggle_button.clicked.connect(self.toggle_listening)
-        layout.addWidget(self.toggle_button)
+        control_layout.addWidget(self.toggle_button)
+
+        # Add the new action selector dropdown
+        self.action_selector = QComboBox(self)
+        self.action_selector.setFixedWidth(150)  # Set width to 150px
+        self.action_selector.addItems(["Run command", "Run shell script", "Send OBS command", "Load website"])
+        control_layout.addWidget(self.action_selector)
+
+        # Add the input box for user to enter their desired command, script location, OBS command, or website URL
+        self.action_input = QLineEdit(self)
+        self.action_input.setFixedWidth(150)  # Set width to 150px
+        control_layout.addWidget(self.action_input)
+
+        # Add the new 'Activate' button
+        self.activate_button = QPushButton("Activate", self)
+        self.activate_button.setFixedWidth(150)  # Set width to 150px
+        self.activate_button.clicked.connect(self.activate_action)
+        control_layout.addWidget(self.activate_button)
 
         icon_container = QWidget(self)
         icon_layout = QHBoxLayout(icon_container)
         icon_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
         icon_layout.setAlignment(Qt.AlignLeft)  # Align left
 
-        self.icon_label = QSvgWidget(self)
+        self.icon_label = QLabel(self)
         self.icon_label.setFixedSize(50, 50)  # Set size to 50x50px
         icon_layout.addWidget(self.icon_label)
 
         icon_container.setFixedWidth(150)  # Set container width to 150px
-        layout.addWidget(icon_container)
+        icon_container.setFixedHeight(50)  # Set container height to 50px
+        control_layout.addWidget(icon_container)
+
+        # Calculate the fixed height for the control container
+        control_container.setFixedHeight(
+            self.device_selector.sizeHint().height() +
+            self.toggle_button.sizeHint().height() +
+            self.action_selector.sizeHint().height() +
+            self.action_input.sizeHint().height() +  # Include the height of the new input box
+            self.activate_button.sizeHint().height() +  # Include the height of the new 'Activate' button
+            icon_container.sizeHint().height() +
+            10  # 2px padding between each of the 5 elements, plus 2px for the new button
+        )
+
+        main_layout.addWidget(control_container)
 
         container = QWidget()
-        container.setLayout(layout)
+        container.setLayout(main_layout)
         self.setCentralWidget(container)
 
         self.midi_input = None
         self.command_map = {}
         self.last_note_on_event = None  # Variable to store the last note_on event
+        self.command1 = None  # Initialize the variable to store the command
 
         self.midi_message_received.connect(self.handle_midi_message)
 
@@ -63,6 +105,8 @@ class MidiCommandApp(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.process_message_queue)
         self.timer.start(100)  # Process messages every 100 ms
+
+        self.update_icon("unassigned")  # Set the initial icon to "unassigned"
 
     def update_device_list(self):
         available_ports = mido.get_input_names()
@@ -111,7 +155,10 @@ class MidiCommandApp(QMainWindow):
         print(f"Loading icon from: {icon_path}")  # Debug print
         if not os.path.exists(icon_path):
             print(f"Icon not found: {icon_path}")  # Debug print
-        self.icon_label.load(icon_path)
+            return
+
+        pixmap = QPixmap(icon_path)
+        self.icon_label.setPixmap(pixmap.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def midi_callback(self, message):
         print(f"MIDI callback triggered with message: {message}")  # Debug print
@@ -132,3 +179,8 @@ class MidiCommandApp(QMainWindow):
         if self.last_note_on_event:
             self.toggle_button.setText(self.last_note_on_event)
             self.update_icon("assigned")
+
+    def activate_action(self):
+        if self.action_selector.currentText() == "Run command":
+            self.command1 = self.action_input.text()
+            print(f"Command stored: {self.command1}")  # Debug print
