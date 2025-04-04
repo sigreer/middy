@@ -1,2 +1,2 @@
 # middy
-GUI-based Linux app for assigning mini inputs to shell commands. Written in Python using PyQt
+GUI-based Linux app for assigning midi inputs to shell commands. Written in Python using PyQt
